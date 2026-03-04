@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "dev.fly.vortex_game_live.twa",
+    "sha256_cert_fingerprints": ["3D:55:DD:A3:27:22:88:FA:0F:29:7B:E2:03:5F:45:8B:59:31:3B:88:60:C6:CA:4C:85:38:38:CA:DD:C4:F5:96"]
+  }
+}]
