@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0a0a2e">
+  <meta name="description" content="VORTEX - Real-time multiplayer cosmic arena. Absorb. Grow. Dominate.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="msapplication-TileColor" content="#0a0a2e">
+  <meta property="og:title" content="VORTEX">
+  <meta property="og:description" content="Real-time multiplayer cosmic arena game. Absorb. Grow. Dominate.">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon-192.svg">
+  <link rel="apple-touch-icon" href="/icons/icon-192.svg">
+  <title>VORTEX</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- LOADING SCREEN -->
+  <div id="loading-screen" class="screen active">
+    <div class="loading-content">
+      <div class="loading-orb">
+        <div class="orb-core"></div>
+        <div class="orb-ring ring1"></div>
+        <div class="orb-ring ring2"></div>
+        <div class="orb-ring ring3"></div>
+      </div>
+      <h1 class="game-title">VORTEX</h1>
+      <div class="loading-bar">
+        <div class="loading-fill" id="loading-fill"></div>
+      </div>
+      <p class="loading-text" id="loading-text">Initializing...</p>
+    </div>
+  </div>
+
+  <!-- MAIN MENU -->
+  <div id="menu-screen" class="screen">
+    <canvas id="menu-bg-canvas"></canvas>
+    <div class="menu-container">
+      <div class="menu-header">
+        <h1 class="game-title glitch" data-text="VORTEX">VORTEX</h1>
+        <p class="tagline">ABSORB &middot; GROW &middot; DOMINATE</p>
+      </div>
+
+      <div class="menu-panel">
+        <div class="player-info" id="player-info" style="display:none">
+          <div class="avatar-orb" id="avatar-orb"></div>
+          <div class="player-details">
+            <span class="player-name" id="menu-player-name"></span>
+            <span class="player-level" id="menu-player-level">Lv. 1</span>
+            <div class="coin-display"><span class="coin-icon">&#9733;</span> <span id="menu-coins">0</span></div>
+          </div>
+        </div>
+
+        <input type="text" id="username-input" class="neon-input" placeholder="Enter your name..." maxlength="20" autocomplete="off">
+
+        <button class="btn btn-primary btn-play" id="btn-play">
+          <span class="btn-text">PLAY</span>
+          <span class="btn-glow"></span>
+        </button>
+
+        <div class="menu-buttons">
+          <button class="btn btn-secondary" id="btn-shop">SKINS</button>
+          <button class="btn btn-secondary" id="btn-coins">COINS</button>
+          <button class="btn btn-secondary" id="btn-leaderboard">RANKS</button>
+          <button class="btn btn-secondary" id="btn-howto">HOW TO</button>
+        </div>
+        <div class="menu-buttons" style="margin-top:0">
+          <button class="btn btn-secondary" id="btn-settings">SETTINGS</button>
+        </div>
+
+        <div class="auth-buttons" id="auth-buttons">
+          <button class="btn btn-ghost" id="btn-login">LOG IN</button>
+          <button class="btn btn-ghost" id="btn-register">SIGN UP</button>
+        </div>
+        <div class="auth-logged-in" id="auth-logged-in" style="display:none">
+          <span id="logged-in-name"></span>
+          <button class="btn btn-ghost btn-sm" id="btn-logout">LOG OUT</button>
+        </div>
+      </div>
+
+      <div class="online-count">
+        <div class="pulse-dot"></div>
+        <span id="online-count">0</span> online
+      </div>
+    </div>
+  </div>
+
+  <!-- AUTH MODAL -->
+  <div id="auth-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <button class="modal-close" id="auth-close">&times;</button>
+      <h2 id="auth-title">LOG IN</h2>
+      <form id="auth-form">
+        <input type="text" id="auth-username" class="neon-input" placeholder="Username" required>
+        <input type="email" id="auth-email" class="neon-input" placeholder="Email (optional)" style="display:none">
+        <input type="password" id="auth-password" class="neon-input" placeholder="Password" required>
+        <p class="auth-error" id="auth-error"></p>
+        <button type="submit" class="btn btn-primary" id="auth-submit">LOG IN</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SHOP MODAL -->
+  <div id="shop-modal" class="modal" style="display:none">
+    <div class="modal-content modal-wide">
+      <button class="modal-close" id="shop-close">&times;</button>
+      <h2>SKIN SHOP</h2>
+      <div class="coin-display coin-display-lg"><span class="coin-icon">&#9733;</span> <span id="shop-coins">0</span></div>
+      <div class="skins-grid" id="skins-grid"></div>
+    </div>
+  </div>
+
+  <!-- LEADERBOARD MODAL -->
+  <div id="leaderboard-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <button class="modal-close" id="leaderboard-close">&times;</button>
+      <h2>LEADERBOARD</h2>
+      <div class="tab-bar">
+        <button class="tab active" data-tab="score">SCORE</button>
+        <button class="tab" data-tab="kills">KILLS</button>
+        <button class="tab" data-tab="xp">XP</button>
+      </div>
+      <div class="leaderboard-list" id="leaderboard-list"></div>
+    </div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settings-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <button class="modal-close" id="settings-close">&times;</button>
+      <h2>SETTINGS</h2>
+      <div class="setting-row">
+        <label>Graphics Quality</label>
+        <select id="setting-quality" class="neon-input"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option><option value="ultra">Ultra</option></select>
+      </div>
+      <div class="setting-row">
+        <label>Sound Effects</label>
+        <input type="range" id="setting-sfx" min="0" max="100" value="70" class="neon-range">
+      </div>
+      <div class="setting-row">
+        <label>Music</label>
+        <input type="range" id="setting-music" min="0" max="100" value="50" class="neon-range">
+      </div>
+      <div class="setting-row">
+        <label>Show FPS</label>
+        <input type="checkbox" id="setting-fps" class="neon-check">
+      </div>
+      <div class="setting-row">
+        <label>Show Minimap</label>
+        <input type="checkbox" id="setting-minimap" checked class="neon-check">
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW TO PLAY MODAL -->
+  <div id="howto-modal" class="modal" style="display:none">
+    <div class="modal-content modal-wide">
+      <button class="modal-close" id="howto-close">&times;</button>
+      <h2>HOW TO PLAY</h2>
+      <div class="howto-sections">
+        <div class="howto-section">
+          <div class="howto-icon">&#127758;</div>
+          <h3>GOAL</h3>
+          <p>Absorb cosmic particles and smaller players to grow your orb. Become the biggest entity in the universe!</p>
+        </div>
+        <div class="howto-section">
+          <div class="howto-icon">&#128433;</div>
+          <h3>CONTROLS</h3>
+          <div class="howto-controls">
+            <div class="control-row"><span class="key">MOUSE</span><span>Move your orb toward the cursor</span></div>
+            <div class="control-row"><span class="key">TOUCH</span><span>Drag to move (mobile)</span></div>
+            <div class="control-row"><span class="key">SPACE</span><span>Boost &mdash; burst of speed (costs mass)</span></div>
+            <div class="control-row"><span class="key">W</span><span>Split &mdash; eject mass forward</span></div>
+            <div class="control-row"><span class="key">E</span><span>Shield &mdash; temporary invincibility (15s cooldown)</span></div>
+          </div>
+        </div>
+        <div class="howto-section">
+          <div class="howto-icon">&#9889;</div>
+          <h3>POWER-UPS</h3>
+          <div class="howto-controls">
+            <div class="control-row"><span class="key" style="background:rgba(255,255,0,0.2);color:#ffff00">&#9889;</span><span>Speed Boost &mdash; 5 seconds of turbo</span></div>
+            <div class="control-row"><span class="key" style="background:rgba(0,255,242,0.2);color:#00fff2">&#128142;</span><span>Mass Orb &mdash; instant +30 mass</span></div>
+            <div class="control-row"><span class="key" style="background:rgba(255,0,128,0.2);color:#ff0080">&#129522;</span><span>Magnet &mdash; attract nearby food</span></div>
+            <div class="control-row"><span class="key" style="background:rgba(191,0,255,0.2);color:#bf00ff">&#128123;</span><span>Ghost &mdash; pass through others briefly</span></div>
+          </div>
+        </div>
+        <div class="howto-section">
+          <div class="howto-icon">&#127942;</div>
+          <h3>TIPS</h3>
+          <ul class="howto-tips">
+            <li>You can only absorb players 15% smaller than you</li>
+            <li>Large orbs move slower &mdash; stay nimble!</li>
+            <li>Use shield when a bigger player charges at you</li>
+            <li>Split mass to distract chasers</li>
+            <li>Earn coins by playing &mdash; spend them on epic skins</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COIN SHOP MODAL -->
+  <div id="coins-modal" class="modal" style="display:none">
+    <div class="modal-content">
+      <button class="modal-close" id="coins-close">&times;</button>
+      <h2>BUY COINS</h2>
+      <div class="coin-display coin-display-lg"><span class="coin-icon">&#9733;</span> <span id="coins-balance">0</span></div>
+      <p style="color:var(--text-secondary);text-align:center;margin-bottom:16px;font-size:14px">Use coins to unlock amazing skins!</p>
+      <div class="coin-packs" id="coin-packs">
+        <div class="coin-pack" data-pack="starter">
+          <div class="pack-coins">500</div>
+          <div class="pack-label">STARTER</div>
+          <div class="pack-price">$0.99</div>
+        </div>
+        <div class="coin-pack popular" data-pack="popular">
+          <div class="pack-badge">BEST VALUE</div>
+          <div class="pack-coins">1,200</div>
+          <div class="pack-label">POPULAR</div>
+          <div class="pack-price">$1.99</div>
+        </div>
+        <div class="coin-pack" data-pack="mega">
+          <div class="pack-coins">3,000</div>
+          <div class="pack-label">MEGA</div>
+          <div class="pack-price">$4.99</div>
+        </div>
+        <div class="coin-pack" data-pack="ultimate">
+          <div class="pack-coins">8,000</div>
+          <div class="pack-label">ULTIMATE</div>
+          <div class="pack-price">$9.99</div>
+        </div>
+      </div>
+      <p style="color:var(--text-secondary);text-align:center;margin-top:16px;font-size:11px">You also earn coins by playing! Every kill and score earns you coins.</p>
+    </div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="game-screen" class="screen">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- HUD -->
+    <div class="hud">
+      <div class="hud-top">
+        <div class="hud-score">
+          <span class="hud-label">SCORE</span>
+          <span class="hud-value" id="hud-score">0</span>
+        </div>
+        <div class="hud-mass">
+          <span class="hud-label">MASS</span>
+          <span class="hud-value" id="hud-mass">10</span>
+        </div>
+        <div class="hud-kills">
+          <span class="hud-label">KILLS</span>
+          <span class="hud-value" id="hud-kills">0</span>
+        </div>
+      </div>
+
+      <div class="hud-leaderboard" id="hud-leaderboard">
+        <h3>LEADERBOARD</h3>
+        <ol id="live-leaderboard"></ol>
+      </div>
+
+      <div class="hud-minimap" id="hud-minimap">
+        <canvas id="minimap-canvas" width="180" height="180"></canvas>
+      </div>
+
+      <div class="hud-abilities">
+        <button class="ability-btn" id="ability-boost" data-key="SPACE">
+          <div class="ability-icon">&#9889;</div>
+          <span>BOOST</span>
+        </button>
+        <button class="ability-btn" id="ability-split" data-key="W">
+          <div class="ability-icon">&#10010;</div>
+          <span>SPLIT</span>
+        </button>
+        <button class="ability-btn" id="ability-shield" data-key="E">
+          <div class="ability-icon">&#9711;</div>
+          <span>SHIELD</span>
+        </button>
+      </div>
+
+      <div class="hud-fps" id="hud-fps" style="display:none">FPS: 60</div>
+    </div>
+
+    <!-- Kill Feed -->
+    <div class="kill-feed" id="kill-feed"></div>
+
+    <!-- Death Screen -->
+    <div class="death-overlay" id="death-overlay" style="display:none">
+      <div class="death-content">
+        <h2>CONSUMED</h2>
+        <p>Killed by <span id="death-killer">???</span></p>
+        <div class="death-stats">
+          <div class="death-stat"><span class="death-stat-label">Score</span><span class="death-stat-value" id="death-score">0</span></div>
+          <div class="death-stat"><span class="death-stat-label">Kills</span><span class="death-stat-value" id="death-kills">0</span></div>
+          <div class="death-stat"><span class="death-stat-label">Max Mass</span><span class="death-stat-value" id="death-mass">0</span></div>
+        </div>
+        <button class="btn btn-primary" id="btn-respawn">PLAY AGAIN</button>
+        <button class="btn btn-ghost" id="btn-menu">MAIN MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/renderer.js"></script>
+  <script src="/js/game.js"></script>
+  <script src="/js/network.js"></script>
+  <script src="/js/main.js"></script>
+  <script>if('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(()=>{});</script>
+</body>
+</html>

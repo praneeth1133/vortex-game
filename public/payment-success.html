@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payment Successful - VORTEX</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #0a0a2e; color: #e0e0ff; font-family: 'Rajdhani', sans-serif;
+    }
+    .container { text-align: center; max-width: 440px; padding: 40px 24px; }
+    .icon {
+      width: 100px; height: 100px; border-radius: 50%; margin: 0 auto 24px;
+      background: linear-gradient(135deg, #39ff14, #00cc00);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 48px; box-shadow: 0 0 40px rgba(57, 255, 20, 0.4);
+      animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes pop { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+    h1 { font-family: 'Orbitron', sans-serif; font-size: 28px; letter-spacing: 4px; color: #39ff14; margin-bottom: 8px; }
+    .coins {
+      font-family: 'Orbitron', sans-serif; font-size: 42px; font-weight: 900;
+      color: #ffff00; text-shadow: 0 0 20px rgba(255, 255, 0, 0.4); margin: 16px 0;
+    }
+    .coins::before { content: '\2605 '; font-size: 28px; }
+    .subtitle { color: #8888cc; font-size: 16px; margin-bottom: 28px; }
+    .btn {
+      display: inline-block; padding: 16px 40px; border-radius: 10px; text-decoration: none;
+      font-family: 'Orbitron', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 3px;
+      background: linear-gradient(135deg, #00fff2, #0088ff); color: #000;
+      box-shadow: 0 0 20px rgba(0, 255, 242, 0.3); transition: all 0.3s;
+    }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 0 40px rgba(0, 255, 242, 0.5); }
+    .loading { color: #8888cc; font-size: 14px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">&#10003;</div>
+    <h1>PAYMENT SUCCESSFUL</h1>
+    <p class="subtitle">Coins have been added to your account!</p>
+    <div class="coins" id="coins-amount">...</div>
+    <p class="subtitle">coins deposited</p>
+    <a href="/" class="btn">PLAY NOW</a>
+    <p class="loading" id="status-msg">Verifying payment...</p>
+  </div>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const coins = params.get('coins') || '0';
+    document.getElementById('coins-amount').textContent = parseInt(coins).toLocaleString();
+
+    // Verify payment on server
+    const token = localStorage.getItem('vortex_token');
+    const sessionId = params.get('session_id');
+    if (token && sessionId) {
+      fetch('/api/shop/payment-status?session_id=' + sessionId, {
+        headers: { 'Authorization': 'Bearer ' + token }
+      }).then(r => r.json()).then(data => {
+        document.getElementById('status-msg').textContent = data.paid ? 'Payment confirmed!' : 'Processing...';
+      }).catch(() => {
+        document.getElementById('status-msg').textContent = 'Coins will appear shortly.';
+      });
+    } else {
+      document.getElementById('status-msg').textContent = 'Coins added!';
+    }
+  </script>
+</body>
+</html>

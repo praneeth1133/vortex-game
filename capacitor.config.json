@@ -1,0 +1,28 @@
+{
+  "appId": "io.vortex.game",
+  "appName": "VORTEX",
+  "webDir": "public",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchAutoHide": true,
+      "backgroundColor": "#0a0a2e",
+      "showSpinner": false,
+      "androidSpinnerStyle": "large",
+      "spinnerColor": "#00fff2"
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0a0a2e"
+    }
+  },
+  "android": {
+    "allowMixedContent": true
+  },
+  "ios": {
+    "contentInset": "always"
+  }
+}

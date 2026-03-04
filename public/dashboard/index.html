@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VORTEX Admin Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/dashboard/style.css">
+</head>
+<body>
+  <!-- Login -->
+  <div id="dash-login" class="dash-login">
+    <div class="login-card">
+      <h1 class="dash-title">VORTEX</h1>
+      <p class="dash-subtitle">ADMIN DASHBOARD</p>
+      <form id="login-form">
+        <input type="text" id="admin-user" class="dash-input" placeholder="Admin Username" required>
+        <input type="password" id="admin-pass" class="dash-input" placeholder="Password" required>
+        <p class="login-error" id="login-error"></p>
+        <button type="submit" class="dash-btn dash-btn-primary">ACCESS DASHBOARD</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div id="dashboard" class="dashboard" style="display:none">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">VORTEX</h2>
+        <span class="sidebar-badge">ADMIN</span>
+      </div>
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" data-page="overview"><span class="nav-icon">&#9632;</span> Overview</a>
+        <a href="#" class="nav-item" data-page="players"><span class="nav-icon">&#9679;</span> Players</a>
+        <a href="#" class="nav-item" data-page="heatmap"><span class="nav-icon">&#9708;</span> Heatmap</a>
+        <a href="#" class="nav-item" data-page="revenue"><span class="nav-icon">&#9733;</span> Revenue</a>
+        <a href="#" class="nav-item" data-page="bots"><span class="nav-icon">&#9760;</span> Bots</a>
+        <a href="#" class="nav-item" data-page="servers"><span class="nav-icon">&#9881;</span> Servers</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="dash-btn dash-btn-ghost" id="btn-refresh">Refresh Data</button>
+        <button class="dash-btn dash-btn-ghost" id="btn-dash-logout">Logout</button>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Overview Page -->
+      <section id="page-overview" class="page active">
+        <h1 class="page-title">Dashboard Overview</h1>
+
+        <!-- KPI Cards -->
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background: linear-gradient(135deg, #00fff2, #0088ff)">&#9679;</div>
+            <div class="kpi-info">
+              <span class="kpi-value" id="kpi-active-players">0</span>
+              <span class="kpi-label">Active Players</span>
+            </div>
+            <div class="kpi-trend kpi-up" id="kpi-active-trend">LIVE</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background: linear-gradient(135deg, #39ff14, #00cc00)">&#9632;</div>
+            <div class="kpi-info">
+              <span class="kpi-value" id="kpi-total-users">0</span>
+              <span class="kpi-label">Total Users</span>
+            </div>
+            <div class="kpi-trend" id="kpi-new-today">+0 today</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background: linear-gradient(135deg, #ff0080, #ff4444)">&#9733;</div>
+            <div class="kpi-info">
+              <span class="kpi-value" id="kpi-revenue">$0</span>
+              <span class="kpi-label">Total Revenue</span>
+            </div>
+            <div class="kpi-trend" id="kpi-revenue-today">$0 today</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background: linear-gradient(135deg, #bf00ff, #8800cc)">&#9881;</div>
+            <div class="kpi-info">
+              <span class="kpi-value" id="kpi-sessions">0</span>
+              <span class="kpi-label">Game Sessions</span>
+            </div>
+            <div class="kpi-trend" id="kpi-sessions-today">0 today</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3>Player Activity (30 Days)</h3>
+            <canvas id="chart-activity"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3>New Users (30 Days)</h3>
+            <canvas id="chart-users"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="chart-card">
+            <h3>Active Rooms</h3>
+            <div id="rooms-list" class="rooms-list"></div>
+          </div>
+          <div class="chart-card">
+            <h3>Server Health</h3>
+            <div class="health-grid">
+              <div class="health-item"><span class="health-label">Uptime</span><span class="health-value" id="health-uptime">-</span></div>
+              <div class="health-item"><span class="health-label">Memory (Heap)</span><span class="health-value" id="health-memory">-</span></div>
+              <div class="health-item"><span class="health-label">Active Rooms</span><span class="health-value" id="health-rooms">-</span></div>
+              <div class="health-item"><span class="health-label">Connections Today</span><span class="health-value" id="health-connections">-</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Players Page -->
+      <section id="page-players" class="page">
+        <h1 class="page-title">Player Management</h1>
+        <div class="toolbar">
+          <input type="text" id="player-search" class="dash-input" placeholder="Search players..." style="max-width:300px">
+          <span class="toolbar-info" id="player-count">0 players</span>
+        </div>
+        <div class="table-wrap">
+          <table class="dash-table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Username</th><th>Level</th><th>Coins</th>
+                <th>Games</th><th>High Score</th><th>Kills</th><th>Status</th><th>Joined</th>
+              </tr>
+            </thead>
+            <tbody id="players-tbody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="players-pagination"></div>
+      </section>
+
+      <!-- Heatmap Page -->
+      <section id="page-heatmap" class="page">
+        <h1 class="page-title">Player Heatmap</h1>
+        <p class="page-desc">Real-time visualization of player positions on the game world</p>
+        <div class="heatmap-container">
+          <canvas id="heatmap-canvas" width="600" height="600"></canvas>
+        </div>
+      </section>
+
+      <!-- Revenue Page -->
+      <section id="page-revenue" class="page">
+        <h1 class="page-title">Revenue Analytics</h1>
+        <div class="kpi-grid" style="grid-template-columns: repeat(2, 1fr)">
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background: linear-gradient(135deg, #ffff00, #ff8800)">&#9733;</div>
+            <div class="kpi-info">
+              <span class="kpi-value" id="rev-total">$0</span>
+              <span class="kpi-label">Total Revenue</span>
+            </div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-icon" style="background: linear-gradient(135deg, #00fff2, #00cc88)">&#9733;</div>
+            <div class="kpi-info">
+              <span class="kpi-value" id="rev-today">$0</span>
+              <span class="kpi-label">Today's Revenue</span>
+            </div>
+          </div>
+        </div>
+        <div class="chart-card" style="margin-top:20px">
+          <h3>Revenue Over Time</h3>
+          <canvas id="chart-revenue"></canvas>
+        </div>
+      </section>
+
+      <!-- Bots Page -->
+      <section id="page-bots" class="page">
+        <h1 class="page-title">Bot Management</h1>
+        <p class="page-desc" style="color:var(--text-secondary);margin-bottom:20px">AI bots are invisible to players — they appear as regular opponents. Only admins can see they're bots.</p>
+
+        <div class="kpi-grid" style="grid-template-columns: repeat(5, 1fr)">
+          <div class="kpi-card">
+            <div class="kpi-info"><span class="kpi-value" id="bot-total">0</span><span class="kpi-label">Total Bots</span></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-info"><span class="kpi-value" id="bot-easy" style="color:#39ff14">0</span><span class="kpi-label">Easy</span></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-info"><span class="kpi-value" id="bot-medium" style="color:#ffff00">0</span><span class="kpi-label">Medium</span></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-info"><span class="kpi-value" id="bot-hard" style="color:#ff6600">0</span><span class="kpi-label">Hard</span></div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-info"><span class="kpi-value" id="bot-expert" style="color:#ff0080">0</span><span class="kpi-label">Expert</span></div>
+          </div>
+        </div>
+
+        <!-- Bot Controls -->
+        <div class="chart-grid" style="margin-top:20px">
+          <div class="chart-card">
+            <h3>Spawn Bots</h3>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
+              <select id="spawn-difficulty" class="dash-input" style="width:auto;flex:1;min-width:120px">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+                <option value="expert">Expert</option>
+              </select>
+              <select id="spawn-count" class="dash-input" style="width:auto;flex:1;min-width:80px">
+                <option value="1">1 bot</option>
+                <option value="2">2 bots</option>
+                <option value="3" selected>3 bots</option>
+                <option value="5">5 bots</option>
+                <option value="10">10 bots</option>
+              </select>
+              <button class="dash-btn dash-btn-primary" id="btn-spawn-bots" style="flex:1;min-width:100px">SPAWN</button>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h3>Remove Bots</h3>
+            <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px">
+              <select id="remove-difficulty" class="dash-input" style="width:auto;flex:1;min-width:120px">
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+                <option value="expert">Expert</option>
+              </select>
+              <select id="remove-count" class="dash-input" style="width:auto;flex:1;min-width:80px">
+                <option value="1">1 bot</option>
+                <option value="2">2 bots</option>
+                <option value="3">3 bots</option>
+                <option value="5">5 bots</option>
+              </select>
+              <button class="dash-btn dash-btn-primary" id="btn-remove-bots" style="flex:1;min-width:100px;background:linear-gradient(135deg,#ff0080,#ff4444)">REMOVE</button>
+            </div>
+            <button class="dash-btn dash-btn-ghost" id="btn-remove-all-bots" style="margin-top:12px;width:100%;color:#ff4444;border-color:rgba(255,68,68,0.3)">REMOVE ALL BOTS</button>
+          </div>
+        </div>
+
+        <!-- Bot List -->
+        <div class="chart-card" style="margin-top:20px">
+          <h3>Active Bots</h3>
+          <div class="table-wrap" style="margin-top:12px">
+            <table class="dash-table">
+              <thead><tr><th>Name</th><th>Difficulty</th><th>State</th><th>Mass</th><th>Score</th><th>Kills</th><th>Status</th></tr></thead>
+              <tbody id="bots-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Servers Page -->
+      <section id="page-servers" class="page">
+        <h1 class="page-title">Server Management</h1>
+        <div class="chart-card">
+          <h3>Active Game Rooms</h3>
+          <div id="server-rooms" class="rooms-list"></div>
+        </div>
+        <div class="chart-card" style="margin-top:20px">
+          <h3>System Resources</h3>
+          <div class="health-grid">
+            <div class="health-item"><span class="health-label">Server Uptime</span><span class="health-value" id="srv-uptime">-</span></div>
+            <div class="health-item"><span class="health-label">Heap Used</span><span class="health-value" id="srv-heap">-</span></div>
+            <div class="health-item"><span class="health-label">RSS Memory</span><span class="health-value" id="srv-rss">-</span></div>
+            <div class="health-item"><span class="health-label">External</span><span class="health-value" id="srv-external">-</span></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/dashboard/app.js"></script>
+</body>
+</html>

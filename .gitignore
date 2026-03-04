@@ -1,0 +1,7 @@
+node_modules/
+.env
+vortex-data.json
+*.log
+.DS_Store
+android/
+ios/
