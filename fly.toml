@@ -1,0 +1,30 @@
+app = 'vortex-game-live'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  PORT = '8080'
+  NODE_ENV = 'production'
+  MAX_PLAYERS_PER_ROOM = '50'
+  TICK_RATE = '60'
+  WORLD_WIDTH = '6000'
+  WORLD_HEIGHT = '6000'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = 'connections'
+    hard_limit = 250
+    soft_limit = 200
+
+[[vm]]
+  memory = '512mb'
+  cpu_kind = 'shared'
+  cpus = 1
