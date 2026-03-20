@@ -6,7 +6,7 @@ class Network {
     this.token = null;
     this.connected = false;
     this.latency = 0;
-    this.inputThrottle = 1000 / 30; // 30 inputs/sec
+    this.inputThrottle = 1000 / 60; // 60 inputs/sec — match server tick rate
     this.lastInputTime = 0;
     this.onGameJoined = null;
     this.onStateUpdate = null;

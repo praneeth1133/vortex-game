@@ -422,7 +422,7 @@ select.neon-input { cursor: pointer; }
   .hud-value { font-size: 16px; }
   .hud-leaderboard { min-width: 150px; padding: 8px 10px; font-size: 12px; }
   .hud-leaderboard h3 { font-size: 10px; }
-  .hud-minimap { bottom: 80px; }
+  .hud-minimap { bottom: 80px; transform: scale(0.6); transform-origin: bottom left; }
   .ability-btn { padding: 8px 12px; min-width: 60px; }
   .ability-icon { font-size: 18px; }
   .modal-content { padding: 20px; }

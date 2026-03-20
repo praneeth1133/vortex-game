@@ -125,6 +125,23 @@ class Game {
     // Send input to server
     if (localPlayer && localPlayer.alive && this.network) {
       this.network.sendInput(this.mouse.worldX, this.mouse.worldY);
+
+      // --- Client-side prediction: move local player immediately ---
+      // Mirror server physics: BASE_SPEED=6, BASE_RADIUS=20
+      const BASE_SPEED = 6;
+      const BASE_RADIUS = 20;
+      const speed = BASE_SPEED * (BASE_RADIUS / (localPlayer.radius * 0.5 + BASE_RADIUS * 0.5));
+      const dx = this.mouse.worldX - localPlayer.x;
+      const dy = this.mouse.worldY - localPlayer.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist > 5) {
+        localPlayer.x += (dx / dist) * speed;
+        localPlayer.y += (dy / dist) * speed;
+      }
+      // Clamp to world bounds
+      const w = this.state.world.width, h = this.state.world.height;
+      localPlayer.x = Math.max(localPlayer.radius, Math.min(w - localPlayer.radius, localPlayer.x));
+      localPlayer.y = Math.max(localPlayer.radius, Math.min(h - localPlayer.radius, localPlayer.y));
     }
 
     // Interpolate remote players
@@ -194,13 +211,24 @@ class Game {
     // Store server state for interpolation
     this.serverState = data.players || {};
 
-    // Update local player directly (authoritative)
+    // Reconcile local player with server (authoritative)
     if (data.players[this.localPlayerId]) {
       const serverLocal = data.players[this.localPlayerId];
       const local = this.state.players[this.localPlayerId];
       if (local) {
-        local.x += (serverLocal.x - local.x) * 0.3;
-        local.y += (serverLocal.y - local.y) * 0.3;
+        // Soft-correct position: snap if too far off, else gentle nudge
+        const dx = serverLocal.x - local.x;
+        const dy = serverLocal.y - local.y;
+        const drift = Math.sqrt(dx * dx + dy * dy);
+        if (drift > 80) {
+          // Large desync — snap to server
+          local.x = serverLocal.x;
+          local.y = serverLocal.y;
+        } else if (drift > 3) {
+          // Small drift — gentle correction (doesn't fight prediction)
+          local.x += dx * 0.15;
+          local.y += dy * 0.15;
+        }
         local.radius = serverLocal.radius;
         local.mass = serverLocal.mass;
         local.score = serverLocal.score;
