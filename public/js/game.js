@@ -29,6 +29,11 @@ class Game {
     this.sfxVolume = 0.7;
     this.musicVolume = 0.5;
 
+    // Throttle timers
+    this._lastHudUpdate = 0;
+    this._lastMinimapUpdate = 0;
+    this._lastLeaderboardHtml = '';
+
     this.setupInput();
   }
 
@@ -161,10 +166,14 @@ class Game {
   render(dt) {
     this.renderer.render(this.state, this.localPlayerId, dt);
 
-    // Minimap
-    const minimapCanvas = document.getElementById('minimap-canvas');
-    if (minimapCanvas && document.getElementById('hud-minimap')?.style.display !== 'none') {
-      this.renderer.renderMinimap(minimapCanvas, this.state, this.localPlayerId, this.state.world);
+    // Minimap — throttle to ~10fps (every 100ms)
+    const now = performance.now();
+    if (now - this._lastMinimapUpdate > 100) {
+      this._lastMinimapUpdate = now;
+      const minimapCanvas = document.getElementById('minimap-canvas');
+      if (minimapCanvas && document.getElementById('hud-minimap')?.style.display !== 'none') {
+        this.renderer.renderMinimap(minimapCanvas, this.state, this.localPlayerId, this.state.world);
+      }
     }
   }
 
@@ -278,6 +287,12 @@ class Game {
   // --- HUD Updates ---
   updateHUD(localPlayer) {
     if (!localPlayer) return;
+
+    // Throttle HUD text updates to ~5fps (every 200ms)
+    const now = performance.now();
+    if (now - this._lastHudUpdate < 200) return;
+    this._lastHudUpdate = now;
+
     const scoreEl = document.getElementById('hud-score');
     const massEl = document.getElementById('hud-mass');
     const killsEl = document.getElementById('hud-kills');
@@ -285,13 +300,17 @@ class Game {
     if (massEl) massEl.textContent = Math.floor(localPlayer.mass || 0);
     if (killsEl) killsEl.textContent = localPlayer.kills || 0;
 
-    // Leaderboard
+    // Leaderboard — only update innerHTML if data actually changed
     const lbEl = document.getElementById('live-leaderboard');
     if (lbEl && this.state.leaderboard) {
-      lbEl.innerHTML = this.state.leaderboard.map((entry, i) => {
+      const html = this.state.leaderboard.map((entry, i) => {
         const isSelf = entry.id === this.localPlayerId;
         return `<li class="${isSelf ? 'self' : ''}"><span>${i + 1}. ${this.escapeHtml(entry.name)}</span><span class="lb-score">${entry.score}</span></li>`;
       }).join('');
+      if (html !== this._lastLeaderboardHtml) {
+        this._lastLeaderboardHtml = html;
+        lbEl.innerHTML = html;
+      }
     }
 
     // FPS

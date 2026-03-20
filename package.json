@@ -28,7 +28,8 @@
     "@capacitor/android": "^5.7.0",
     "@capacitor/cli": "^5.7.0",
     "@capacitor/core": "^5.7.0",
-    "@capacitor/ios": "^5.7.0"
+    "@capacitor/ios": "^5.7.0",
+    "sharp": "^0.34.5"
   },
   "engines": {
     "node": ">=18.0.0"

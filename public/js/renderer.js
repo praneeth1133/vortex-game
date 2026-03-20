@@ -1,4 +1,4 @@
-/* ========= VORTEX Renderer - Canvas2D with WebGL-quality effects ========= */
+/* ========= VORTEX Renderer - GPU-accelerated Canvas2D ========= */
 
 class ParticlePool {
   constructor(max) {
@@ -32,37 +32,50 @@ class ParticlePool {
 class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.ctx = canvas.getContext('2d');
-    this.dpr = Math.min(window.devicePixelRatio || 1, 2);
+    // GPU acceleration: alpha:false avoids compositing, desynchronized reduces latency
+    this.ctx = canvas.getContext('2d', { alpha: false, desynchronized: true });
+    // Detect mobile/low-end devices
+    this.isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    this.isLowEnd = this.isMobile && (navigator.hardwareConcurrency || 4) <= 4;
+    // Cap DPR: 1 on low-end mobile, 1.5 on mobile, 2 on desktop
+    this.dpr = this.isLowEnd ? 1 : (this.isMobile ? Math.min(window.devicePixelRatio || 1, 1.5) : Math.min(window.devicePixelRatio || 1, 2));
     this.width = 0;
     this.height = 0;
+
+    // GPU compositing hint
+    canvas.style.willChange = 'contents';
 
     // Camera
     this.camera = { x: 0, y: 0, zoom: 1, targetZoom: 1, shakeX: 0, shakeY: 0, shakeIntensity: 0 };
 
-    // Particles
-    this.particles = new ParticlePool(2000);
+    // Particles - fewer on mobile
+    this.particles = new ParticlePool(this.isMobile ? 500 : 2000);
     this.bgStars = [];
-    this.trailPoints = new Map(); // playerId -> [{x,y,alpha}]
+    this.trailPoints = new Map();
 
-    // Quality settings
-    this.quality = 'medium'; // low, medium, high, ultra
+    // Auto-detect quality based on device
+    this.quality = this.isLowEnd ? 'low' : (this.isMobile ? 'low' : 'medium');
     this.qualityConfig = {
-      low:    { particles: 0.3, stars: 100, trail: 5,  glow: false, gridAlpha: 0.03, bloom: false },
-      medium: { particles: 0.6, stars: 250, trail: 15, glow: true,  gridAlpha: 0.05, bloom: false },
-      high:   { particles: 1.0, stars: 500, trail: 25, glow: true,  gridAlpha: 0.06, bloom: true },
-      ultra:  { particles: 1.0, stars: 800, trail: 40, glow: true,  gridAlpha: 0.08, bloom: true },
+      low:    { particles: 0.15, stars: 50,  trail: 3,  glow: false, gridAlpha: 0.03, bloom: false },
+      medium: { particles: 0.4,  stars: 150, trail: 10, glow: false, gridAlpha: 0.05, bloom: false },
+      high:   { particles: 0.7,  stars: 300, trail: 20, glow: true,  gridAlpha: 0.06, bloom: false },
+      ultra:  { particles: 1.0,  stars: 500, trail: 30, glow: true,  gridAlpha: 0.08, bloom: true },
     };
 
-    // Performance tracking
+    // Performance tracking + adaptive quality
     this.fps = 60;
     this.frameCount = 0;
     this.fpsTime = 0;
     this.lastTime = 0;
+    this.fpsHistory = [];
+    this.autoQualityEnabled = true;
 
     // Colors
     this.bgColor = '#0a0a2e';
     this.gridColor = 'rgba(0, 255, 242, 0.04)';
+
+    // Cached minimap context
+    this._minimapCtx = null;
 
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -84,6 +97,10 @@ class Renderer {
     this.canvas.style.width = this.width + 'px';
     this.canvas.style.height = this.height + 'px';
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    // Disable image smoothing for performance on mobile
+    if (this.isMobile) {
+      this.ctx.imageSmoothingEnabled = false;
+    }
   }
 
   initStars() {
@@ -169,7 +186,20 @@ class Renderer {
   render(gameState, localPlayerId, dt) {
     const now = performance.now();
     this.frameCount++;
-    if (now - this.fpsTime > 1000) { this.fps = this.frameCount; this.frameCount = 0; this.fpsTime = now; }
+    if (now - this.fpsTime > 1000) {
+      this.fps = this.frameCount; this.frameCount = 0; this.fpsTime = now;
+      // Adaptive quality: auto-downgrade if FPS drops
+      if (this.autoQualityEnabled) {
+        this.fpsHistory.push(this.fps);
+        if (this.fpsHistory.length > 5) this.fpsHistory.shift();
+        const avgFps = this.fpsHistory.reduce((a, b) => a + b, 0) / this.fpsHistory.length;
+        if (avgFps < 25 && this.quality !== 'low') {
+          this.setQuality('low');
+        } else if (avgFps < 40 && this.quality === 'high') {
+          this.setQuality('medium');
+        }
+      }
+    }
 
     // Update particles
     this.particles.update(dt);
@@ -231,24 +261,46 @@ class Renderer {
 
   renderStars(ctx, now) {
     const z = this.camera.zoom;
-    for (const star of this.bgStars) {
-      const parallax = 0.15;
-      const sx = (star.x - this.camera.x * parallax) * z + this.width / 2;
-      const sy = (star.y - this.camera.y * parallax) * z + this.height / 2;
-      if (sx < -10 || sx > this.width + 10 || sy < -10 || sy > this.height + 10) continue;
+    const parallax = 0.15;
+    const camPX = this.camera.x * parallax;
+    const camPY = this.camera.y * parallax;
+    const halfW = this.width / 2;
+    const halfH = this.height / 2;
+    const w = this.width;
+    const h = this.height;
 
-      const twinkle = Math.sin(now * 0.001 * star.twinkleSpeed + star.twinkleOffset) * 0.3 + 0.7;
-      ctx.globalAlpha = star.alpha * twinkle;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(sx, sy, star.radius * z, 0, Math.PI * 2);
-      ctx.fill();
+    // On mobile/low quality, draw stars as simple rectangles (much faster than arc)
+    const useSimple = this.isMobile || this.quality === 'low';
+    ctx.fillStyle = '#ffffff';
+
+    if (useSimple) {
+      // Batch all stars into a single path with uniform alpha
+      ctx.globalAlpha = 0.5;
+      for (const star of this.bgStars) {
+        const sx = (star.x - camPX) * z + halfW;
+        const sy = (star.y - camPY) * z + halfH;
+        if (sx < -5 || sx > w + 5 || sy < -5 || sy > h + 5) continue;
+        const r = star.radius * z;
+        ctx.fillRect(sx - r, sy - r, r * 2, r * 2);
+      }
+    } else {
+      for (const star of this.bgStars) {
+        const sx = (star.x - camPX) * z + halfW;
+        const sy = (star.y - camPY) * z + halfH;
+        if (sx < -10 || sx > w + 10 || sy < -10 || sy > h + 10) continue;
+        const twinkle = Math.sin(now * 0.001 * star.twinkleSpeed + star.twinkleOffset) * 0.3 + 0.7;
+        ctx.globalAlpha = star.alpha * twinkle;
+        ctx.beginPath();
+        ctx.arc(sx, sy, star.radius * z, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
   }
 
   renderNebula(ctx, now) {
-    if (this.quality === 'low') return;
+    // Skip on low/mobile — nebulas are purely cosmetic
+    if (this.quality === 'low' || this.isMobile) return;
     const z = this.camera.zoom;
     const nebulaColors = [
       { x: 1500, y: 1500, r: 600, c: 'rgba(0, 100, 255, 0.015)' },
@@ -301,45 +353,52 @@ class Renderer {
 
     ctx.strokeStyle = 'rgba(255, 0, 80, 0.4)';
     ctx.lineWidth = 3 * this.camera.zoom;
-    ctx.setLineDash([20, 10]);
-    ctx.strokeRect(tl.x, tl.y, w, h);
-    ctx.setLineDash([]);
-
-    // Danger glow at edges
-    const glowWidth = 60 * this.camera.zoom;
-    const gradient = ctx.createLinearGradient(tl.x, 0, tl.x + glowWidth, 0);
-    gradient.addColorStop(0, 'rgba(255, 0, 80, 0.1)');
-    gradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(tl.x, tl.y, glowWidth, h);
+    if (!this.isMobile) {
+      ctx.setLineDash([20, 10]);
+      ctx.strokeRect(tl.x, tl.y, w, h);
+      ctx.setLineDash([]);
+      // Danger glow at edges (desktop only)
+      const glowWidth = 60 * this.camera.zoom;
+      const gradient = ctx.createLinearGradient(tl.x, 0, tl.x + glowWidth, 0);
+      gradient.addColorStop(0, 'rgba(255, 0, 80, 0.1)');
+      gradient.addColorStop(1, 'transparent');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(tl.x, tl.y, glowWidth, h);
+    } else {
+      // Mobile: simple solid border, no dash, no glow gradient
+      ctx.strokeRect(tl.x, tl.y, w, h);
+    }
   }
 
   renderFood(ctx, food) {
     if (!food) return;
     const z = this.camera.zoom;
+    const useGlow = this.config.glow && !this.isMobile;
+    // Batch food by color for fewer state changes
+    ctx.globalAlpha = 0.9;
+    let lastColor = '';
     for (const f of food) {
       if (!this.isVisible(f.x, f.y, f.radius + 10)) continue;
       const s = this.worldToScreen(f.x, f.y);
       const r = f.radius * z;
-
-      if (this.config.glow) {
-        ctx.shadowBlur = 8 * z;
-        ctx.shadowColor = f.color;
+      if (f.color !== lastColor) {
+        ctx.fillStyle = f.color;
+        lastColor = f.color;
       }
-      ctx.globalAlpha = f.type === 'death' ? 0.8 : 0.9;
-      ctx.fillStyle = f.color;
+      if (f.type === 'death') ctx.globalAlpha = 0.8;
       ctx.beginPath();
       ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.globalAlpha = 1;
+      if (f.type === 'death') ctx.globalAlpha = 0.9;
     }
+    ctx.globalAlpha = 1;
   }
 
   renderPowerups(ctx, powerups, now) {
     if (!powerups) return;
     const z = this.camera.zoom;
     const puColors = { speed: '#ffff00', mass: '#00ffff', magnet: '#ff4488', ghost: '#aa88ff' };
+    const simple = this.isMobile || this.quality === 'low';
 
     for (const pu of powerups) {
       if (!this.isVisible(pu.x, pu.y, 30)) continue;
@@ -348,37 +407,34 @@ class Renderer {
       const pulse = Math.sin(now * 0.003) * 0.15 + 1;
       const color = puColors[pu.type] || '#ffffff';
 
-      // Outer glow
-      if (this.config.glow) {
-        ctx.shadowBlur = 25 * z;
-        ctx.shadowColor = color;
+      if (simple) {
+        // Simple solid circle for mobile
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, r * pulse, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // Rotating ring (no save/restore - manual transform)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2 * z;
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, r * pulse * 1.3, now * 0.002, now * 0.002 + Math.PI * 1.5);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+
+        // Core gradient
+        const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * pulse);
+        grad.addColorStop(0, '#ffffff');
+        grad.addColorStop(0.4, color);
+        grad.addColorStop(1, 'transparent');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, r * pulse, 0, Math.PI * 2);
+        ctx.fill();
       }
 
-      // Rotating ring
-      ctx.save();
-      ctx.translate(s.x, s.y);
-      ctx.rotate(now * 0.002);
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2 * z;
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath();
-      ctx.arc(0, 0, r * pulse * 1.3, 0, Math.PI * 1.5);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.restore();
-
-      // Core
-      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, r * pulse);
-      grad.addColorStop(0, '#ffffff');
-      grad.addColorStop(0.4, color);
-      grad.addColorStop(1, 'transparent');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(s.x, s.y, r * pulse, 0, Math.PI * 2);
-      ctx.fill();
-
       // Icon
-      ctx.shadowBlur = 0;
       ctx.fillStyle = '#000';
       ctx.font = `${Math.floor(14 * z)}px sans-serif`;
       ctx.textAlign = 'center';
@@ -389,22 +445,22 @@ class Renderer {
 
   renderTrails(ctx) {
     const z = this.camera.zoom;
+    ctx.lineCap = 'round';
     for (const [, trail] of this.trailPoints) {
       if (trail.length < 2) continue;
+      // Batch entire trail as single path with uniform style
+      const color = trail[trail.length - 1].color || '#00fff2';
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4 * z;
+      ctx.globalAlpha = 0.2;
+      ctx.beginPath();
+      const s0 = this.worldToScreen(trail[0].x, trail[0].y);
+      ctx.moveTo(s0.x, s0.y);
       for (let i = 1; i < trail.length; i++) {
-        const prev = trail[i - 1], curr = trail[i];
-        const alpha = (i / trail.length) * 0.3;
-        const s1 = this.worldToScreen(prev.x, prev.y);
-        const s2 = this.worldToScreen(curr.x, curr.y);
-        ctx.globalAlpha = alpha;
-        ctx.strokeStyle = curr.color || '#00fff2';
-        ctx.lineWidth = (3 + (i / trail.length) * 4) * z;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(s1.x, s1.y);
-        ctx.lineTo(s2.x, s2.y);
-        ctx.stroke();
+        const s = this.worldToScreen(trail[i].x, trail[i].y);
+        ctx.lineTo(s.x, s.y);
       }
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
   }
@@ -416,91 +472,94 @@ class Renderer {
     const s = this.worldToScreen(player.x, player.y);
     const r = player.radius * this.camera.zoom;
     const z = this.camera.zoom;
-    const pulse = Math.sin(now * 0.003) * 0.03 + 1;
     const skinColors = this.getSkinColors(player.skin);
     const baseColor = skinColors[0] || '#00fff2';
     const secondColor = skinColors[1] || '#0088ff';
+    const simple = this.isMobile || this.quality === 'low';
 
-    // Shield effect
+    // Shield effect (simplified on mobile)
     if (player.shieldActive) {
-      ctx.globalAlpha = 0.15 + Math.sin(now * 0.005) * 0.1;
+      ctx.globalAlpha = 0.2;
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 3 * z;
       ctx.beginPath();
       ctx.arc(s.x, s.y, r * 1.35, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
 
-      // Shield hex pattern
-      ctx.globalAlpha = 0.08;
-      const hexCount = 6;
-      for (let i = 0; i < hexCount; i++) {
-        const angle = (Math.PI * 2 * i) / hexCount + now * 0.001;
-        const hx = s.x + Math.cos(angle) * r * 1.2;
-        const hy = s.y + Math.sin(angle) * r * 1.2;
+    if (simple) {
+      // MOBILE: solid color fill, no gradients, no shadowBlur
+      ctx.fillStyle = baseColor;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Simple inner circle for depth
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(s.x - r * 0.2, s.y - r * 0.2, r * 0.4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else {
+      // DESKTOP: gradients + glow
+      if (this.config.glow) {
+        // Fake glow: larger circle behind instead of shadowBlur
+        ctx.globalAlpha = 0.15;
+        ctx.fillStyle = baseColor;
         ctx.beginPath();
-        ctx.arc(hx, hy, 6 * z, 0, Math.PI * 2);
+        ctx.arc(s.x, s.y, r * 1.3, 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = 1;
-    }
 
-    // Outer glow
-    if (this.config.glow) {
-      ctx.shadowBlur = (isLocal ? 30 : 20) * z;
-      ctx.shadowColor = baseColor;
-    }
-
-    // Main body gradient
-    const bodyGrad = ctx.createRadialGradient(
-      s.x - r * 0.2, s.y - r * 0.2, r * 0.1,
-      s.x, s.y, r * pulse
-    );
-    bodyGrad.addColorStop(0, '#ffffff');
-    bodyGrad.addColorStop(0.25, baseColor);
-    bodyGrad.addColorStop(0.7, secondColor);
-    bodyGrad.addColorStop(1, 'rgba(0,0,0,0.3)');
-
-    ctx.fillStyle = bodyGrad;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, r * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Inner highlight
-    ctx.globalAlpha = 0.3;
-    const highlightGrad = ctx.createRadialGradient(
-      s.x - r * 0.25, s.y - r * 0.3, 0,
-      s.x, s.y, r * 0.8
-    );
-    highlightGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
-    highlightGrad.addColorStop(1, 'transparent');
-    ctx.fillStyle = highlightGrad;
-    ctx.beginPath();
-    ctx.arc(s.x, s.y, r * pulse, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-
-    // Energy ring (for larger players)
-    if (player.mass > 30) {
-      ctx.globalAlpha = 0.2;
-      ctx.strokeStyle = baseColor;
-      ctx.lineWidth = 1.5 * z;
+      const bodyGrad = ctx.createRadialGradient(
+        s.x - r * 0.2, s.y - r * 0.2, r * 0.1,
+        s.x, s.y, r
+      );
+      bodyGrad.addColorStop(0, '#ffffff');
+      bodyGrad.addColorStop(0.25, baseColor);
+      bodyGrad.addColorStop(0.7, secondColor);
+      bodyGrad.addColorStop(1, 'rgba(0,0,0,0.3)');
+      ctx.fillStyle = bodyGrad;
       ctx.beginPath();
-      const ringPhase = now * 0.002;
-      ctx.arc(s.x, s.y, r * 1.15, ringPhase, ringPhase + Math.PI * 1.6);
-      ctx.stroke();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Inner highlight
+      ctx.globalAlpha = 0.3;
+      const highlightGrad = ctx.createRadialGradient(
+        s.x - r * 0.25, s.y - r * 0.3, 0,
+        s.x, s.y, r * 0.8
+      );
+      highlightGrad.addColorStop(0, 'rgba(255,255,255,0.8)');
+      highlightGrad.addColorStop(1, 'transparent');
+      ctx.fillStyle = highlightGrad;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fill();
       ctx.globalAlpha = 1;
+
+      // Energy ring (desktop only, larger players)
+      if (player.mass > 30) {
+        ctx.globalAlpha = 0.2;
+        ctx.strokeStyle = baseColor;
+        ctx.lineWidth = 1.5 * z;
+        ctx.beginPath();
+        const ringPhase = now * 0.002;
+        ctx.arc(s.x, s.y, r * 1.15, ringPhase, ringPhase + Math.PI * 1.6);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     }
 
-    // Boost effect
+    // Boost effect (simplified)
     if (player.boosting) {
-      ctx.globalAlpha = 0.4;
-      const boostGrad = ctx.createRadialGradient(s.x, s.y, r, s.x, s.y, r * 1.8);
-      boostGrad.addColorStop(0, baseColor);
-      boostGrad.addColorStop(1, 'transparent');
-      ctx.fillStyle = boostGrad;
+      ctx.globalAlpha = 0.3;
+      ctx.fillStyle = baseColor;
       ctx.beginPath();
-      ctx.arc(s.x, s.y, r * 1.8, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y, r * 1.5, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -510,8 +569,6 @@ class Renderer {
     ctx.font = `600 ${fontSize}px Rajdhani, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-
-    // Text shadow
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillText(player.username || '???', s.x + 1, s.y + 1);
     ctx.fillStyle = isLocal ? '#ffffff' : 'rgba(255,255,255,0.9)';
@@ -527,8 +584,8 @@ class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // Local player indicator
-    if (isLocal) {
+    // Local player indicator (no setLineDash - expensive on mobile)
+    if (isLocal && !simple) {
       ctx.strokeStyle = 'rgba(255,255,255,0.15)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 4]);
@@ -557,28 +614,19 @@ class Renderer {
 
   renderMinimap(minimapCanvas, gameState, localPlayerId, world) {
     if (!world) return;
-    const mctx = minimapCanvas.getContext('2d');
+    // Cache minimap context
+    if (!this._minimapCtx) this._minimapCtx = minimapCanvas.getContext('2d');
+    const mctx = this._minimapCtx;
     const mw = minimapCanvas.width, mh = minimapCanvas.height;
 
     mctx.fillStyle = 'rgba(10, 10, 46, 0.9)';
     mctx.fillRect(0, 0, mw, mh);
 
-    // Border
     mctx.strokeStyle = 'rgba(0, 255, 242, 0.2)';
     mctx.lineWidth = 1;
     mctx.strokeRect(0, 0, mw, mh);
 
-    // Food (as tiny dots)
-    if (gameState.food) {
-      mctx.globalAlpha = 0.2;
-      mctx.fillStyle = '#00fff2';
-      for (const f of gameState.food) {
-        const mx = (f.x / world.width) * mw;
-        const my = (f.y / world.height) * mh;
-        mctx.fillRect(mx, my, 1, 1);
-      }
-      mctx.globalAlpha = 1;
-    }
+    // Skip food dots on minimap (hundreds of fillRect calls for minimal value)
 
     // Players
     if (gameState.players) {
@@ -628,44 +676,50 @@ class Renderer {
 
   // --- Menu Background ---
   renderMenuBg(canvas, now) {
-    const ctx = canvas.getContext('2d');
-    const w = canvas.width = window.innerWidth;
-    const h = canvas.height = window.innerHeight;
+    // Cache context, only resize when window actually changes
+    if (!this._menuCtx) this._menuCtx = canvas.getContext('2d');
+    const ctx = this._menuCtx;
+    const ww = window.innerWidth, wh = window.innerHeight;
+    if (canvas.width !== ww || canvas.height !== wh) {
+      canvas.width = ww; canvas.height = wh;
+    }
+    const w = canvas.width, h = canvas.height;
 
     ctx.fillStyle = this.bgColor;
     ctx.fillRect(0, 0, w, h);
 
-    // Slow-moving stars
-    for (let i = 0; i < 150; i++) {
+    // Fewer stars on mobile, use fillRect instead of arc
+    const starCount = this.isMobile ? 60 : 150;
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < starCount; i++) {
       const x = ((i * 137.508 + now * 0.005) % (w + 100)) - 50;
       const y = ((i * 89.237 + now * 0.003) % (h + 100)) - 50;
-      const alpha = (Math.sin(now * 0.001 + i) * 0.3 + 0.4);
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(x, y, 0.8 + (i % 3) * 0.4, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.globalAlpha = 0.4 + (i % 5) * 0.08;
+      const sz = 0.8 + (i % 3) * 0.4;
+      ctx.fillRect(x, y, sz, sz);
     }
 
-    // Floating orbs
-    ctx.globalCompositeOperation = 'lighter';
-    const orbData = [
-      { cx: w * 0.25, cy: h * 0.35, r: 80, c1: 'rgba(0,255,242,0.04)', c2: 'rgba(0,100,255,0.02)' },
-      { cx: w * 0.75, cy: h * 0.6, r: 120, c1: 'rgba(255,0,128,0.03)', c2: 'rgba(180,0,255,0.02)' },
-      { cx: w * 0.5, cy: h * 0.8, r: 90, c1: 'rgba(57,255,20,0.03)', c2: 'rgba(0,200,100,0.01)' }
-    ];
-    for (const orb of orbData) {
-      const ox = orb.cx + Math.sin(now * 0.0005) * 30;
-      const oy = orb.cy + Math.cos(now * 0.0007) * 20;
-      const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, orb.r);
-      grad.addColorStop(0, orb.c1);
-      grad.addColorStop(1, orb.c2);
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(ox, oy, orb.r, 0, Math.PI * 2);
-      ctx.fill();
+    // Skip floating orb gradients on mobile
+    if (!this.isMobile) {
+      ctx.globalCompositeOperation = 'lighter';
+      const orbData = [
+        { cx: w * 0.25, cy: h * 0.35, r: 80, c1: 'rgba(0,255,242,0.04)', c2: 'rgba(0,100,255,0.02)' },
+        { cx: w * 0.75, cy: h * 0.6, r: 120, c1: 'rgba(255,0,128,0.03)', c2: 'rgba(180,0,255,0.02)' },
+        { cx: w * 0.5, cy: h * 0.8, r: 90, c1: 'rgba(57,255,20,0.03)', c2: 'rgba(0,200,100,0.01)' }
+      ];
+      for (const orb of orbData) {
+        const ox = orb.cx + Math.sin(now * 0.0005) * 30;
+        const oy = orb.cy + Math.cos(now * 0.0007) * 20;
+        const grad = ctx.createRadialGradient(ox, oy, 0, ox, oy, orb.r);
+        grad.addColorStop(0, orb.c1);
+        grad.addColorStop(1, orb.c2);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(ox, oy, orb.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
     }
-    ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
   }
 }

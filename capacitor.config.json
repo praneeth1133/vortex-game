@@ -1,26 +1,31 @@
 {
   "appId": "io.vortex.game",
-  "appName": "VORTEX",
+  "appName": "VORTEX: Cosmic Arena",
   "webDir": "public",
   "server": {
     "androidScheme": "https",
-    "cleartext": true
+    "cleartext": false
   },
   "plugins": {
     "SplashScreen": {
       "launchAutoHide": true,
+      "launchShowDuration": 2000,
       "backgroundColor": "#0a0a2e",
       "showSpinner": false,
       "androidSpinnerStyle": "large",
-      "spinnerColor": "#00fff2"
+      "spinnerColor": "#00fff2",
+      "splashFullScreen": true,
+      "splashImmersive": true
     },
     "StatusBar": {
       "style": "DARK",
-      "backgroundColor": "#0a0a2e"
+      "backgroundColor": "#0a0a2e",
+      "overlaysWebView": false
     }
   },
   "android": {
-    "allowMixedContent": true
+    "allowMixedContent": false,
+    "backgroundColor": "#0a0a2e"
   },
   "ios": {
     "contentInset": "always"
